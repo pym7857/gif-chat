@@ -6,24 +6,25 @@ block content
   fieldset
     legend 채팅 내용
     #chat-list
-      for chat in chats
-        if chat.user === user               
-          .mine(style='color:' + chat.user)     
-            div= chat.user
-            if chat.gif
-              img(src='/gif/' + chat.gif)
-            else
+      if chats !== null
+        for chat in chats
+          if chat.user === user               
+            .mine(style='color:' + chat.user)     
+              div= chat.user
+              if chat.gif
+                img(src='/gif/' + chat.gif)
+              else
+                div= chat.chat
+          else if chat.user === 'system'      
+            .system
               div= chat.chat
-        else if chat.user === 'system'      
-          .system
-            div= chat.chat
-        else                               
-          .other(style='color:' + chat.user)
-            div= chat.user
-            if chat.gif
-              img(src='/gif/' + chat.gif)
-            else
-              div= chat.chat
+          else                               
+            .other(style='color:' + chat.user)
+              div= chat.user
+              if chat.gif
+                img(src='/gif/' + chat.gif)
+              else
+                div= chat.chat
   form#chat-form(action='/chat' method='post' enctype='multipart/form-data')
     label(for='gif') GIF 올리기
     input#gif(type='file' name='gif' accept='image/gif')
@@ -36,7 +37,7 @@ block content
                                                                 // /chat 으로 보낸 데이터만 받을 수 있습니다.
       path: '/socket.io'
     });
-    socket.on('join', function (data) {         // 이벤트: join(사용자 입장)
+    socket.on('join', function (data) {         // 이벤트리스너: join(사용자 입장)
       var div = document.createElement('div');
       div.classList.add('system');
       var chat = document.createElement('div');
@@ -44,11 +45,66 @@ block content
       div.appendChild(chat);
       document.querySelector('#chat-list').appendChild(div);
     });
-    socket.on('exit', function (data) {         // 이벤트: exit(사용자 퇴장)
+    socket.on('exit', function (data) {         // 이벤트리스너: exit(사용자 퇴장)
       var div = document.createElement('div');
       div.classList.add('system');
       var chat = document.createElement('div');
       div.textContent = data.chat;
       div.appendChild(chat);
       document.querySelector('#chat-list').appendChild(div);
+    });
+    socket.on('chat', function (data) {         // 이벤트리스너 : chat(채팅 메시지가 router -> 웹 소켓 으로 전송될 때 호출됩니다.)
+      var div = document.createElement('div');
+      if (data.user === '#{user}') {
+        div.classList.add('mine');
+      } else {
+        div.classList.add('other');
+      }
+      var name = document.createElement('div');
+      name.textContent = data.user;
+      div.appendChild(name);
+      if (data.chat) {
+        var chat = document.createElement('div');
+        chat.textContent = data.chat;
+        div.appendChild(chat);
+      } else {
+        var gif = document.createElement('img');
+        gif.src = '/gif/' + data.gif;
+        div.appendChild(gif);
+      }
+      div.style.color = data.user;
+      document.querySelector('#chat-list').appendChild(div);
+    });
+    /* 채팅을 전송하는 폼에 submit 이벤트 리스너를 추가합니다. */
+    document.querySelector('#chat-form').addEventListener('submit', function (e) {  // submit 이벤트 리스너
+        e.preventDefault();
+        if (e.target.chat.value) {
+          var xhr = new XMLHttpRequest();
+          xhr.onload = function () {
+            if (xhr.status === 200) {
+              e.target.chat.value = '';
+            } else {
+              console.error(xhr.responseText);
+            }
+          };
+          xhr.open('POST','/room/#{room._id}/chat');  // routes - index.js 로 보냄
+          xhr.setRequestHeader('Content-Type','application/json');
+          xhr.send(JSON.stringify({ chat: this.chat.value }));
+        }
+    });
+    /* 프런트 화면에 이미지를 선택했을 때 업로드 하는 이벤트 리스너를 추가합니다.*/
+    document.querySelector('#gif').addEventListener('change', function (e) {
+      var formData = new FormData();
+      var xhr = new XMLHttpRequest();
+      console.log(e.target.files);
+      formData.append('gif', e.target.files[0]);
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          e.target.file = null;   // 비워주기 
+        } else {
+          console.error(xhr.responseText);
+        }
+      };
+      xhr.open('POST','/room/#{room._id}/gif');
+      xhr.send(formData);
     });
